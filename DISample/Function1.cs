@@ -6,25 +6,45 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Azure.WebJobs.Host;
 using Newtonsoft.Json;
+using Autofac;
 
 namespace DISample
 {
+
+
     public static class Function1
     {
+        private static IContainer Container { get; set; }
+
+        static Function1() {
+            var builder = new ContainerBuilder();
+            builder.RegisterType<ServiceAImpl>().As<IServiceA>().SingleInstance();
+            builder.RegisterType<ServiceBImpl>().As<IServiceB>().SingleInstance();
+            Container = builder.Build();
+        }
+
         [FunctionName("Function1")]
         public static IActionResult Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]HttpRequest req, TraceWriter log)
         {
-            log.Info("C# HTTP trigger function processed a request.");
+            log.Info("C# HTTP trigger function1 processed a request.");
+            using (var scope = Container.BeginLifetimeScope())
+            {
+                var service = scope.Resolve<IServiceA>();
 
-            string name = req.Query["name"];
+                return (ActionResult)new OkObjectResult($"Hello, {service.GetMessage()}: instanceId: {service.GetInstanceId()}");
+            }
+        }
 
-            string requestBody = new StreamReader(req.Body).ReadToEnd();
-            dynamic data = JsonConvert.DeserializeObject(requestBody);
-            name = name ?? data?.name;
+        [FunctionName("Function2")]
+        public static IActionResult Function2([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]HttpRequest req, TraceWriter log)
+        {
+            log.Info("C# HTTP trigger function2 processed a request.");
+            using (var scope = Container.BeginLifetimeScope())
+            {
+                var service = scope.Resolve<IServiceA>();
 
-            return name != null
-                ? (ActionResult)new OkObjectResult($"Hello, {name}")
-                : new BadRequestObjectResult("Please pass a name on the query string or in the request body");
+                return (ActionResult)new OkObjectResult($"Hello, {service.GetMessage()}: instanceId: {service.GetInstanceId()}");
+            }
         }
     }
 }
